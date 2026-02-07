@@ -3,7 +3,8 @@ from web_api import start_api
 from threading import Thread
 from interpreter import interpret
 from recommender import recommend
-from tray import FluffyTray
+from security_monitor import SecurityMonitor
+import state
 
 import socket
 import json
@@ -15,7 +16,6 @@ import copy
 IPC_HOST = "127.0.0.1"
 IPC_PORT = 9001
 
-tray = None
 shutting_down = False
 ipc_socket = None
 
@@ -99,12 +99,23 @@ def compute_signals(msg):
 # -----------------------------
 # MESSAGE HANDLER
 # -----------------------------
-def handle_message(raw_msg):
+def handle_message(raw_msg, monitor):
+    # If UI is not active, skip heavy processing and state updates
+    if not state.UI_ACTIVE:
+        # Still run security monitor in background!
+        security_alerts = monitor.analyze(raw_msg, state.UI_ACTIVE)
+        state.update_security_alerts(security_alerts)
+        return
+
     # Work on a clean copy to avoid race conditions
     msg = copy.deepcopy(raw_msg)
 
     signals = compute_signals(msg)
     msg["signals"] = signals
+
+    # Security Analysis
+    security_alerts = monitor.analyze(msg, state.UI_ACTIVE)
+    state.update_security_alerts(security_alerts)
 
     interpretations = interpret(msg)
     recommendations = recommend(msg)
@@ -113,12 +124,6 @@ def handle_message(raw_msg):
     msg["_recommendations"] = recommendations
 
     add_execution_log("Telemetry received from core", "system")
-
-    mem_level = signals.get("memory_pressure", "LOW")
-    cpu_level = signals.get("cpu_pressure", "NORMAL")
-    tray_level = mem_level if mem_level in ("HIGH", "CRITICAL") else cpu_level
-
-    tray.set_status(tray_level)
 
     # Push ONE complete snapshot to UI
     update_state(msg)
@@ -138,15 +143,15 @@ def handle_message(raw_msg):
 # MAIN LOOP
 # -----------------------------
 def main():
-    global tray, ipc_socket
+    global ipc_socket
 
     Thread(target=start_api, daemon=True).start()
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
-    tray = FluffyTray()
-    tray.run()
+    monitor = SecurityMonitor()
+    state.MONITOR = monitor
 
     ipc_socket = connect_ipc()
     print("[Fluffy Brain] Connected to IPC", file=sys.stderr)
@@ -182,12 +187,15 @@ def main():
 
                     try:
                         raw = json.loads(line)
+                        
+                        # Support for both wrapped and unwrapped messages
+                        msg_data = raw.get("payload", raw) if isinstance(raw, dict) else raw
 
                         # --- CONFIRMATION REQUEST FROM RUST ---
-                        if raw.get("type") == "confirm_required":
-                            cmd_id = raw.get("command_id")
-                            cmd_name = raw.get("command_name", "Unknown Command")
-                            details = raw.get("details", "")
+                        if isinstance(msg_data, dict) and msg_data.get("type") == "confirm_required":
+                            cmd_id = msg_data.get("command_id")
+                            cmd_name = msg_data.get("command_name", "Unknown Command")
+                            details = msg_data.get("details", "")
                             
                             from state import add_confirmation
                             add_confirmation(cmd_id, cmd_name, details)
@@ -199,15 +207,14 @@ def main():
                             continue
 
                         # --- EXECUTION RESULT FROM RUST ---
-                        if raw.get("type") == "execution_result":
+                        if isinstance(msg_data, dict) and msg_data.get("type") == "execution_result":
                              add_execution_log(
-                                f"Command {raw.get('command')} {raw.get('status')}",
+                                f"Command {msg_data.get('command')} {msg_data.get('status')}",
                                 "info"
                             )
                              continue
 
-                        payload = raw.get("payload", raw)
-                        handle_message(payload)
+                        handle_message(msg_data, monitor)
 
                     except json.JSONDecodeError as e:
                         print(f"[JSON ERROR] {e}", file=sys.stderr)

@@ -67,6 +67,15 @@ async function killProcess(pid, mode = "tree") {
   });
 }
 
+async function securityAction(pid, action) {
+  addLog(`Security action (${action}) for PID ${pid}`, "action");
+  await apiRequest("/security_action", {
+    method: "POST",
+    body: JSON.stringify({ pid, action })
+  });
+  await fetchData();
+}
+
 /* =========================
    RENDERING
 ========================= */
@@ -88,10 +97,13 @@ function sortTree(nodes) {
   nodes.sort((a, b) => b.ram_mb - a.ram_mb);
   nodes.forEach(n => sortTree(n.children));
 }
-
-function renderNode(node, container, depth = 0) {
+function renderNode(node, container, depth = 0, suspiciousPids = new Set()) {
   const row = document.createElement("div");
   row.className = `process-row depth-${Math.min(depth, 4)}`;
+  if (suspiciousPids.has(node.pid)) {
+    row.style.borderLeft = "3px solid #ff4d4d";
+    row.style.background = "#2a1a1a";
+  }
 
   const left = document.createElement("div");
   if (node.children.length > 0) {
@@ -122,7 +134,7 @@ function renderNode(node, container, depth = 0) {
   container.appendChild(row);
 
   if (expanded.has(node.pid)) {
-    node.children.forEach(child => renderNode(child, container, depth + 1));
+    node.children.forEach(child => renderNode(child, container, depth + 1, suspiciousPids));
   }
 }
 
@@ -135,7 +147,56 @@ function renderTree(data) {
 
   const tree = buildTree(data.system.processes.top_ram);
   sortTree(tree);
-  tree.forEach(node => renderNode(node, container));
+
+  // Add highlight for suspicious processes
+  const suspiciousPids = new Set((data.security_alerts || []).map(a => a.pid));
+
+  tree.forEach(node => renderNode(node, container, 0, suspiciousPids));
+}
+
+function renderSecurityAlerts(data) {
+  const container = document.getElementById("security-alerts");
+  const alerts = data.security_alerts || [];
+
+  if (alerts.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+
+  container.innerHTML = "<h3>⚠ Behavioral Security Alerts</h3>";
+  alerts.forEach(alert => {
+    const div = document.createElement("div");
+    div.className = "security-alert-item";
+
+    div.innerHTML = `
+      <h4>Suspicious Activity: ${alert.name} (PID ${alert.pid}) <span class="badge">Score: ${alert.score}</span></h4>
+      <p>Reasons: ${alert.reasons.join(", ")}</p>
+    `;
+
+    const actions = document.createElement("div");
+    actions.style.background = "transparent";
+    actions.style.padding = "0";
+
+    const killBtn = document.createElement("button");
+    killBtn.textContent = "Kill Process";
+    killBtn.onclick = () => killProcess(alert.pid);
+    actions.appendChild(killBtn);
+
+    const trustBtn = document.createElement("button");
+    trustBtn.textContent = "Trust";
+    trustBtn.className = "action-btn trust-btn";
+    trustBtn.onclick = () => securityAction(alert.pid, "trust");
+    actions.appendChild(trustBtn);
+
+    const ignoreBtn = document.createElement("button");
+    ignoreBtn.textContent = "Ignore";
+    ignoreBtn.className = "action-btn";
+    ignoreBtn.onclick = () => securityAction(alert.pid, "ignore");
+    actions.appendChild(ignoreBtn);
+
+    div.appendChild(actions);
+    container.appendChild(div);
+  });
 }
 
 function renderUI(data) {
@@ -145,7 +206,9 @@ function renderUI(data) {
   if (data.system) {
     const sys = data.system;
     document.getElementById("system").innerText =
-      `RAM: ${sys.ram.used_mb} / ${sys.ram.total_mb} MB | CPU: ${sys.cpu.usage_percent.toFixed(1)}%`;
+      `RAM: ${sys.ram.used_mb} / ${sys.ram.total_mb} MB | CPU: ${sys.cpu.usage_percent.toFixed(1)}% | Net: ↓${sys.network.received_kb} KB ↑${sys.network.transmitted_kb} KB`;
+
+    renderSecurityAlerts(data);
     renderTree(data);
   }
 
@@ -167,11 +230,25 @@ function renderUI(data) {
     confs.forEach(c => {
       const div = document.createElement("div");
       div.className = "confirm-item";
-      div.innerHTML = `
-                <p><strong>${c.command_name}</strong>: ${c.details}</p>
-                <button onclick="confirmCommand('${c.command_id}', true)">Confirm</button>
-                <button onclick="confirmCommand('${c.command_id}', false)" style="background:#555">Cancel</button>
-            `;
+
+      const p = document.createElement("p");
+      const strong = document.createElement("strong");
+      strong.textContent = c.command_name;
+      p.appendChild(strong);
+      p.appendChild(document.createTextNode(`: ${c.details}`));
+      div.appendChild(p);
+
+      const confirmBtn = document.createElement("button");
+      confirmBtn.textContent = "Confirm";
+      confirmBtn.onclick = () => confirmCommand(c.command_id, true);
+      div.appendChild(confirmBtn);
+
+      const cancelBtn = document.createElement("button");
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.className = "cancel-btn";
+      cancelBtn.onclick = () => confirmCommand(c.command_id, false);
+      div.appendChild(cancelBtn);
+
       warn.appendChild(div);
     });
   } else {

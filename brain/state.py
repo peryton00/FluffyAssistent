@@ -3,6 +3,9 @@ from threading import Lock
 LATEST_STATE = None
 EXECUTION_LOGS = []
 PENDING_CONFIRMATIONS = []
+SECURITY_ALERTS = []
+MONITOR = None
+UI_ACTIVE = False
 LOCK = Lock()
 
 
@@ -38,3 +41,9 @@ def remove_confirmation(cmd_id):
     global PENDING_CONFIRMATIONS
     with LOCK:
         PENDING_CONFIRMATIONS = [c for c in PENDING_CONFIRMATIONS if c["command_id"] != cmd_id]
+
+
+def update_security_alerts(alerts):
+    global SECURITY_ALERTS
+    with LOCK:
+        SECURITY_ALERTS = alerts

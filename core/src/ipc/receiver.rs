@@ -88,15 +88,15 @@ fn execute(cmd: IpcCommand) {
                     Err(_) => "failed",
                 };
 
-                println!(
-                    "{}",
-                    serde_json::json!({
+                crate::ipc::server::IpcServer::broadcast_global(&crate::ipc::protocol::IpcMessage {
+                    schema_version: "1.0".to_string(),
+                    payload: serde_json::json!({
                         "type": "execution_result",
                         "command": "KillProcess",
                         "pid": pid,
                         "status": status
-                    })
-                );
+                    }),
+                });
             }
         }
         _ => {}

@@ -29,11 +29,13 @@ button {
 button:hover {
   opacity: 0.85;
 }
+
 #logs {
   max-height: 300px;
   overflow-y: auto;
   margin-top: 20px;
 }
+
 .process-row {
   display: flex;
   justify-content: space-between;
@@ -52,12 +54,15 @@ button:hover {
 .depth-1 {
   margin-left: 16px;
 }
+
 .depth-2 {
   margin-left: 32px;
 }
+
 .depth-3 {
   margin-left: 48px;
 }
+
 .depth-4 {
   margin-left: 64px;
 }
@@ -65,9 +70,11 @@ button:hover {
 .log-error {
   color: #ff5f5f;
 }
+
 .log-action {
   color: #ffa500;
 }
+
 .log-system {
   color: #888;
 }
@@ -84,31 +91,40 @@ button:hover {
 #controls {
   margin-top: 20px;
 }
+
 #controls button {
   margin-right: 10px;
 }
+
 #controls button:last-child {
   margin-right: 0;
 }
+
 #status {
   margin-top: 20px;
   font-size: 16px;
 }
+
 #status span {
   font-weight: bold;
 }
+
 #status .active {
   color: #4caf50;
 }
+
 #status .inactive {
   color: #f44336;
 }
+
 #processes {
   margin-top: 20px;
 }
+
 #processes h2 {
   margin-bottom: 10px;
 }
+
 .log-error {
   color: #ff5f5f;
 }
@@ -142,4 +158,59 @@ button:hover {
 
 .toggle-btn:hover {
   color: #fff;
+}
+
+.cancel-btn {
+  background: #555 !important;
+}
+
+.security-alert-item {
+  background: #3a1e1e;
+  padding: 12px;
+  border-radius: 6px;
+  margin-top: 10px;
+  border-left: 5px solid #ff4d4d;
+  animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-red {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 77, 77, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 77, 77, 0);
+  }
+}
+
+.security-alert-item h4 {
+  margin: 0 0 5px 0;
+  color: #ff4d4d;
+}
+
+.security-alert-item p {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+}
+
+.security-alert-item .badge {
+  background: #ff4d4d;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.action-btn {
+  background: #444;
+  margin-right: 8px;
+}
+
+.trust-btn {
+  background: #2e7d32;
 }
